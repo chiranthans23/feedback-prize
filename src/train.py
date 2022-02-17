@@ -1,5 +1,6 @@
 
 from config import CFG
+from metric import *
 from data import DataModule
 from model import ModelModule
 
@@ -7,11 +8,12 @@ import numpy as np
 import pandas as pd
 import gc
 import torch
+from ast import literal_eval
 
 from transformers import AutoTokenizer
 from pytorch_lightning.plugins import DeepSpeedPlugin
 from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import ModelCheckpoint,LearningRateMonitor
+from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 
 # Weights and Biases
@@ -23,7 +25,7 @@ wandb_logger = WandbLogger(
     project='feedback-essay-lf',
     job_type='train',
     anonymous='allow',
-    config=CFG()
+    config=CFG().__dict__
 )
 
 
@@ -37,6 +39,7 @@ if __name__ == '__main__':
     ids_to_labels = {k:v for k,v in enumerate(output_labels)}
 
     train_text_df = pd.read_csv("../input/train_NER.csv")
+    train_text_df.entities = train_text_df.entities.apply(lambda x: literal_eval(x) )
     train_df = pd.read_csv("../input/train.csv")
 
     # CHOOSE VALIDATION INDEXES
@@ -67,7 +70,7 @@ if __name__ == '__main__':
 
 
     filename = f"{CFG.model_name}-{tag}"
-    checkpoint_callback = ModelCheckpoint(monitor='val_score', dirpath='./', mode='max', filename=filename,save_top_k=1)
+    checkpoint_callback = ModelCheckpoint(monitor='val_score', dirpath='../models/long-former', mode='max', filename=filename,save_top_k=1)
 
     trainer = Trainer(
         gpus=CFG.n_procs,
@@ -76,7 +79,7 @@ if __name__ == '__main__':
         logger=wandb_logger,
         num_sanity_val_steps=0,
         callbacks=[checkpoint_callback],
-        plugins=DeepSpeedPlugin(stage=3,cpu_offload=True)
+        strategy="deepspeed_stage_3_offload"
         #strategy=CFG.stg,
         #log_every_n_steps=5,
         )
