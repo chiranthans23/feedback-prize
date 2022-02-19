@@ -59,33 +59,37 @@ if __name__ == '__main__':
     print("TRAIN Dataset: {}".format(train_dataset.shape))
     print("TEST Dataset: {}".format(test_dataset.shape))
     
-    tag = 'ep{}-'.format(CFG.epochs)
+    train_gt = train_df.loc[train_df['id'].isin(IDS[train_idx])][['id','discourse_type', 'predictionstring']].reset_index(drop=True)
+    test_gt = train_df.loc[train_df['id'].isin(IDS[valid_idx])][['id','discourse_type', 'predictionstring']].reset_index(drop=True)
+
+    ###
+    tag = 'ep{}-len{}'.format(CFG.epochs,CFG.max_length)
 
     CFG.steps_lr=len(train_dataset)//(CFG.batch_size) + 1
 
     tokenizer = AutoTokenizer.from_pretrained(CFG.tokpath,add_prefix_space=True)
 
-    dm = DataModule(train_dataset, test_dataset, tokenizer, None, CFG)
-    model = ModelModule(CFG.__dict__)
+    dm = DataModule(train_dataset, test_dataset, tokenizer, CFG)
+    model = ModelModule(CFG.__dict__,train_gt,test_gt)
 
 
     filename = f"{CFG.model_name}-{tag}"
-    checkpoint_callback = ModelCheckpoint(monitor='val_score', dirpath='../models/long-former', mode='max', filename=filename,save_top_k=1)
+    checkpoint_callback = ModelCheckpoint(monitor='val_f1', dirpath='./', mode='max', filename=filename,save_top_k=1)
+    lr_logger = LearningRateMonitor(logging_interval="step")
+
 
     trainer = Trainer(
         gpus=CFG.n_procs,
         max_epochs=CFG.epochs,
         precision=CFG.precision,
-        logger=wandb_logger,
         num_sanity_val_steps=0,
-        callbacks=[checkpoint_callback],
-        strategy="deepspeed_stage_3_offload"
-        #strategy=CFG.stg,
-        #log_every_n_steps=5,
+        callbacks=[checkpoint_callback,lr_logger],
+    #    strategy=CFG.stg,
+    #    log_every_n_steps=5,
         )
 
     trainer.fit(model, datamodule=dm)
         
-    #del model
+    del model
     gc.collect()
     torch.cuda.empty_cache()

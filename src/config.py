@@ -47,7 +47,7 @@ class CFG:
         self.precision = 16
         self.seed=2022
         self.scheduler='lr_logging'
-        self.model_name='allenai/longformer-base-4096'
+        self.model_name='BigBird'
         self.modelpath='../input/py-bigbird-v26'
         self.tokpath = '../input/py-bigbird-v26'
         self.max_length=1024

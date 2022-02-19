@@ -10,25 +10,22 @@ output_labels = ['O', 'B-Lead', 'I-Lead', 'B-Position', 'I-Position', 'B-Claim',
 labels_to_ids = {v:k for k,v in enumerate(output_labels)}
 ids_to_labels = {k:v for k,v in enumerate(output_labels)}
 
-
 class Dataset(Dataset):
-    def __init__(self, dataframe, tokenizer, max_len, get_wids):
-        #super().__init__()
-        self.len = len(dataframe)
+    def __init__(self, dataframe, tokenizer, max_len):
         self.data = dataframe
         self.tokenizer = tokenizer
         self.max_len = max_len
-        self.get_wids = get_wids # for validation
     
     def __len__(self):
-        return self.len
+        return len(self.data)
     
     def __getitem__(self, index):
         LABEL_ALL_SUBTOKENS=True
         
         # GET TEXT AND WORD LABELS 
         text = self.data.text[index]        
-        word_labels = self.data.entities[index] if not self.get_wids else None
+        word_labels = self.data.entities[index]
+        text_id = self.data.id[index]
 
         # TOKENIZE TEXT (use is_split_into_words)
         encoding = self.tokenizer(text.split(),
@@ -43,51 +40,42 @@ class Dataset(Dataset):
         word_ids = encoding.word_ids()  
         
         # CREATE TARGETS
-        if not self.get_wids:
-            previous_word_idx = None
-            label_ids = []
-            for word_idx in word_ids: # tokens len                        
-                if word_idx is None:
-                    label_ids.append(-100)
-                elif word_idx != previous_word_idx: # change word   
+        previous_word_idx = None
+        label_ids = []
+        for word_idx in word_ids: # tokens wise                       
+            if word_idx is None:# padding
+                label_ids.append(-100) # label ignored in loss
+            elif word_idx != previous_word_idx: # change word   
+                label_ids.append( labels_to_ids[word_labels[word_idx]] )
+            else: # same word
+                if LABEL_ALL_SUBTOKENS:
                     label_ids.append( labels_to_ids[word_labels[word_idx]] )
-                else: # same word
-                    if LABEL_ALL_SUBTOKENS:
-                        label_ids.append( labels_to_ids[word_labels[word_idx]] )
-                    else:
-                        label_ids.append(-100)
-                previous_word_idx = word_idx
-        
-        if self.get_wids:
-            word_ids2 = [w if w is not None else -1 for w in word_ids]
-            return {
-                'input_ids': torch.tensor(encoding['input_ids'], dtype=torch.long),
-                'attention_mask': torch.tensor(encoding['attention_mask'], dtype=torch.long),
-                'labels': torch.tensor(label_ids, dtype=torch.long),
-                'wids': torch.tensor(word_ids2, dtype=torch.long)
-            }
-        else:
-            return {
-                'input_ids': torch.tensor(encoding['input_ids'], dtype=torch.long),
-                'attention_mask': torch.tensor(encoding['attention_mask'], dtype=torch.long),
-                'labels': torch.tensor(label_ids, dtype=torch.long)
-            }
+                else:
+                    label_ids.append(-100)
+            previous_word_idx = word_idx
+            
+        return {
+            'input_ids': torch.tensor(encoding['input_ids'], dtype=torch.long),
+            'attention_mask': torch.tensor(encoding['attention_mask'], dtype=torch.long),
+            'labels': torch.tensor(label_ids, dtype=torch.long),
+            'word_ids':str(word_ids),
+            'text_id':text_id
+        }
 
 
 class DataModule(LightningDataModule):
-    def __init__(self, train_df, val_df, tokenizer, get_wids=None, cfg=None):
+    def __init__(self, train_df, val_df, tokenizer, cfg=None):
         super().__init__()
         self.train_df = train_df
         self.val_df = val_df
         self.cfg = cfg
         self.tokenizer = tokenizer
-        self.get_wids = get_wids
-
+        
     
     def setup(self,stage):
         if stage == 'fit':
-            self.train_ds = Dataset(self.train_df, self.tokenizer, self.cfg.max_length, self.get_wids)
-            self.valid_ds = Dataset(self.val_df,   self.tokenizer, self.cfg.max_length, self.get_wids)
+            self.train_ds = Dataset(self.train_df, self.tokenizer, self.cfg.max_length)
+            self.valid_ds = Dataset(self.val_df,   self.tokenizer, self.cfg.max_length)
 
     
     def train_dataloader(self):
@@ -103,8 +91,6 @@ class DataModule(LightningDataModule):
             shuffle=False, num_workers=self.cfg.num_workers,
             pin_memory=True
             )
-
-
 
 
 
