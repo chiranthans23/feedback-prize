@@ -11,7 +11,6 @@ import torch
 from ast import literal_eval
 
 from transformers import AutoTokenizer
-from pytorch_lightning.plugins import DeepSpeedPlugin
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
@@ -32,6 +31,7 @@ wandb_logger = WandbLogger(
 if __name__ == '__main__':
     
     CFG = CFG()
+    print(CFG.__dict__)
     output_labels = ['O', 'B-Lead', 'I-Lead', 'B-Position', 'I-Position', 'B-Claim', 'I-Claim', 'B-Counterclaim', 'I-Counterclaim', 
           'B-Rebuttal', 'I-Rebuttal', 'B-Evidence', 'I-Evidence', 'B-Concluding Statement', 'I-Concluding Statement']
 
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     
     # CREATE TRAIN SUBSET AND VALID SUBSET
     data = train_text_df[['id','text', 'entities']]
-    train_dataset = data.loc[data['id'].isin(IDS[train_idx]),['text', 'entities']].reset_index(drop=True)
+    train_dataset = data.loc[data['id'].isin(IDS[train_idx]),['id','text', 'entities']].reset_index(drop=True)
     test_dataset = data.loc[data['id'].isin(IDS[valid_idx])].reset_index(drop=True)
 
     print("FULL Dataset: {}".format(data.shape))
@@ -68,14 +68,13 @@ if __name__ == '__main__':
     CFG.steps_lr=len(train_dataset)//(CFG.batch_size) + 1
 
     tokenizer = AutoTokenizer.from_pretrained(CFG.tokpath,add_prefix_space=True)
-
+    # help(ModelModule)
     dm = DataModule(train_dataset, test_dataset, tokenizer, CFG)
     model = ModelModule(CFG.__dict__,train_gt,test_gt)
 
 
     filename = f"{CFG.model_name}-{tag}"
     checkpoint_callback = ModelCheckpoint(monitor='val_f1', dirpath='./', mode='max', filename=filename,save_top_k=1)
-    lr_logger = LearningRateMonitor(logging_interval="step")
 
 
     trainer = Trainer(
@@ -83,7 +82,9 @@ if __name__ == '__main__':
         max_epochs=CFG.epochs,
         precision=CFG.precision,
         num_sanity_val_steps=0,
-        callbacks=[checkpoint_callback,lr_logger],
+        callbacks=[checkpoint_callback],
+        logger=wandb_logger,
+        strategy="deepspeed_stage_3_offload"
     #    strategy=CFG.stg,
     #    log_every_n_steps=5,
         )
