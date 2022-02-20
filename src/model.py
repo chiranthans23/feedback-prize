@@ -9,7 +9,7 @@ from ast import literal_eval
 
 # transformer
 from transformers import AdamW, AutoConfig,AutoModelForTokenClassification
-
+from deepspeed.ops.adam import FusedAdam
 from sklearn.metrics import accuracy_score
 
 
@@ -145,7 +145,7 @@ class ModelModule(LightningModule):
          
         
     def configure_optimizers(self):      
-        optimizer = AdamW(
+        optimizer = FusedAdam(
             self.parameters(), lr=self.cfg['lr'],
             #weight_decay=self.hparams.weight_decay
             )

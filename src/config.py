@@ -53,7 +53,7 @@ class CFG:
         self.max_length=1024
         self.num_labels=15
         self.epochs=2
-        self.batch_size = 4
+        self.batch_size = 10
         self.val_batch_size = self.batch_size 
         self.lr=2.5e-5
         self.max_lr=self.lr

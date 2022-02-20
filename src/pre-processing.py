@@ -3,7 +3,7 @@ from tqdm import tqdm
 import os
 
 if __name__ == '__main__':
-    train_df = pd.read_csv('../input/train.csv')
+    train_df = pd.read_csv('../input/corrected_train.csv')
     test_names, train_texts = [], []
     for f in tqdm(list(os.listdir('../input/train'))):
         test_names.append(f.replace('.txt', ''))
